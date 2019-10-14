@@ -1,0 +1,62 @@
+From 57dda5e311653b5116c5dc7b0d4bc344aedfb8a8 Mon Sep 17 00:00:00 2001
+From: Donald Sharp <sharpd@cumulusnetworks.com>
+Date: Mon, 24 Jun 2019 10:46:24 -0400
+Subject: [PATCH 2/2] staticd: If we are told a nexthop has changed reinstall
+ the route.
+
+If we are told that a dependant nexthop has changed, just
+reinstall the route.
+
+Signed-off-by: Donald Sharp <sharpd@cumulusnetworks.com>
+---
+ staticd/static_nht.c | 13 +------------
+ 1 file changed, 1 insertion(+), 12 deletions(-)
+
+diff --git a/staticd/static_nht.c b/staticd/static_nht.c
+index 9af30a5..2aa0db5 100644
+--- a/staticd/static_nht.c
++++ b/staticd/static_nht.c
+@@ -37,8 +37,6 @@ static void static_nht_update_safi(struct prefix *p, uint32_t nh_num,
+ 	struct static_route *si;
+ 	struct static_vrf *svrf;
+ 	struct route_node *rn;
+-	bool orig;
+-	bool reinstall;
+ 
+ 	svrf = vrf->info;
+ 	if (!svrf)
+@@ -49,7 +47,6 @@ static void static_nht_update_safi(struct prefix *p, uint32_t nh_num,
+ 		return;
+ 
+ 	for (rn = route_top(stable); rn; rn = route_next(rn)) {
+-		reinstall = false;
+ 		for (si = rn->info; si; si = si->next) {
+ 			if (si->nh_vrf_id != nh_vrf_id)
+ 				continue;
+@@ -60,7 +57,6 @@ static void static_nht_update_safi(struct prefix *p, uint32_t nh_num,
+ 			    && si->type != STATIC_IPV6_GATEWAY_IFNAME)
+ 				continue;
+ 
+-			orig = si->nh_valid;
+ 			if (p->family == AF_INET
+ 			    && p->u.prefix4.s_addr == si->addr.ipv4.s_addr)
+ 				si->nh_valid = !!nh_num;
+@@ -69,14 +65,7 @@ static void static_nht_update_safi(struct prefix *p, uint32_t nh_num,
+ 			    && memcmp(&p->u.prefix6, &si->addr.ipv6, 16) == 0)
+ 				si->nh_valid = !!nh_num;
+ 
+-			if (orig != si->nh_valid)
+-				reinstall = true;
+-
+-			if (reinstall) {
+-				static_zebra_route_add(rn, si, vrf->vrf_id,
+-						       safi, true);
+-				reinstall = false;
+-			}
++			static_zebra_route_add(rn, si, vrf->vrf_id, safi, true);
+ 		}
+ 	}
+ }
+-- 
+2.7.4
+
