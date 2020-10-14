@@ -8,13 +8,17 @@
 include $(TOPDIR)/rules.mk
 PKG_NAME:=frr
 PKG_RELEASE:=1
-PKG_SOURCE_VERSION:=7.1
+PKG_SOURCE_VERSION:=7.3.1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_SOURCE_VERSION).tar.gz
-PKG_HASH:=96513465a8837b02cf93c1efd9fa88ac06e1189e0fc6a6573f24092773631797
+PKG_HASH:=f4ddb95a737aff2765a9847a24462ec4b45a623fb17430b00f94705a853a16fd
 PKG_SOURCE_URL:=https://github.com/FRRouting/frr/releases/download/frr-$(PKG_SOURCE_VERSION)
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_SOURCE_VERSION)
-#HOST_BUILD_DIR:=$(BUILD_DIR_HOST)/$(PKG_NAME)-$(PKG_SOURCE_VERSION)
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_SOURCE_VERSION)/$(PKG_NAME)-$(PKG_SOURCE_VERSION)
+#HOST_BUILD_DIR:=$(BUILD_DIR_HOST)/$(PKG_NAME)-$(PKG_SOURCE_VERSION)/frr-$(PKG_NAME)-$(PKG_SOURCE_VERSION)
+
+#UNPACK_CMD:=tar zxvf "$(DL_DIR)/$(PKG_SOURCE)" -C "$(PKG_BUILD_DIR)/"
+UNPACK_CMD:=tar zxvf "$(DL_DIR)/$(PKG_SOURCE)" -C "$(BUILD_DIR)/$(PKG_NAME)-$(PKG_SOURCE_VERSION)"
+#MAKE_PATH:=frr-$(PKG_NAME)-$(PKG_SOURCE_VERSION)
 
 PKG_CONFIG_DEPENDS:= \
 	CONFIG_IPV6 \
@@ -26,6 +30,7 @@ PKG_CONFIG_DEPENDS:= \
 	CONFIG_PACKAGE_frr-isisd \
 	CONFIG_PACKAGE_frr-ldpd \
 	CONFIG_PACKAGE_frr-libfrr \
+	CONFIG_PACKAGE_frr-libfrrcares \
 	CONFIG_PACKAGE_frr-nhrpd \
 	CONFIG_PACKAGE_frr-ospfd \
 	CONFIG_PACKAGE_frr-ospf6d \
@@ -34,6 +39,7 @@ PKG_CONFIG_DEPENDS:= \
 	CONFIG_PACKAGE_frr-ripd \
 	CONFIG_PACKAGE_frr-ripngd \
 	CONFIG_PACKAGE_frr-staticd \
+	CONFIG_PACKAGE_frr-vrrpd \
 	CONFIG_PACKAGE_frr-vtysh \
 	CONFIG_PACKAGE_frr-watchfrr \
 	CONFIG_PACKAGE_frr-zebra
@@ -122,9 +128,15 @@ define Package/frr-libfrr
   DEPENDS+=+libjson-c +libyang
 endef
 
+define Package/frr-libfrrcares
+  $(call Package/frr/Default)
+  TITLE:=libfrrcares library
+  DEPENDS+=+libcares +libjson-c 
+endef
+
 define Package/frr-nhrpd
   $(call Package/frr/Default)
-  DEPENDS+=+frr-libfrr +libcares
+  DEPENDS+=+frr-libfrr +frr-libfrrcares
   TITLE:=NHRP routing engine
 endef
 
@@ -170,6 +182,12 @@ define Package/frr-staticd
   TITLE:=STATICD routing engine
 endef
 
+define Package/frr-vrrpd
+  $(call Package/frr/Default)
+  DEPENDS+=+frr-libfrr
+  TITLE:=VRRPD routing engine
+endef
+
 define Package/frr-vtysh
   $(call Package/frr/Default)
   DEPENDS+=+frr-libfrr +libreadline +libncurses
@@ -192,6 +210,10 @@ endef
 
 define Package/frr-libfrr/conffiles
 /etc/frr/
+endef
+
+define Package/frr-vtysh/conffiles
+/etc/frr/vtysh.conf
 endef
 
 #MAKE_PATH = ./build
@@ -247,6 +269,7 @@ define Build/Configure
 	$(call autoconf_bool,CONFIG_PACKAGE_frr-staticd,staticd) \
 	$(call autoconf_bool,CONFIG_PACKAGE_frr-ripd,ripd) \
 	$(call autoconf_bool,CONFIG_PACKAGE_frr-ripngd,ripngd) \
+	$(call autoconf_bool,CONFIG_PACKAGE_frr-vrrpd,vrrpd) \
 	$(call autoconf_bool,CONFIG_PACKAGE_frr-vtysh,vtysh) \
 	$(call autoconf_bool,CONFIG_PACKAGE_frr-libfrr,zebra) \
 )
@@ -354,9 +377,16 @@ define Package/frr-staticd/install
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/build/staticd/.libs/staticd $(1)/usr/sbin/
 endef
 
+define Package/frr-vrrpd/install
+	$(INSTALL_DIR) $(1)/usr/sbin
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/build/vrrpd/.libs/vrrpd $(1)/usr/sbin/
+endef
+
 define Package/frr-vtysh/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/build/vtysh/.libs/vtysh $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/etc/frr
+	$(INSTALL_CONF) ./files/vtysh.conf $(1)/etc/frr/
 endef
 
 define Package/frr-libfrr/install
@@ -369,6 +399,11 @@ define Package/frr-libfrr/install
 	$(INSTALL_CONF) ./files/{frr.conf,daemons} $(1)/etc/frr/
 endef
 
+define Package/frr-libfrrcares/install
+	$(INSTALL_DIR) $(1)/usr/lib
+	$(CP) $(PKG_BUILD_DIR)/build/lib/.libs/libfrrcares.so* $(1)/usr/lib/
+endef
+
 $(eval $(call HostBuild))
 $(eval $(call BuildPackage,frr))
 $(eval $(call BuildPackage,frr-babeld))
@@ -379,6 +414,7 @@ $(eval $(call BuildPackage,frr-fabricd))
 $(eval $(call BuildPackage,frr-isisd))
 $(eval $(call BuildPackage,frr-ldpd))
 $(eval $(call BuildPackage,frr-libfrr))
+$(eval $(call BuildPackage,frr-libfrrcares))
 $(eval $(call BuildPackage,frr-nhrpd))
 $(eval $(call BuildPackage,frr-ospfd))
 $(eval $(call BuildPackage,frr-ospf6d))
@@ -387,6 +423,7 @@ $(eval $(call BuildPackage,frr-pimd))
 $(eval $(call BuildPackage,frr-ripd))
 $(eval $(call BuildPackage,frr-ripngd))
 $(eval $(call BuildPackage,frr-staticd))
+$(eval $(call BuildPackage,frr-vrrpd))
 $(eval $(call BuildPackage,frr-vtysh))
 $(eval $(call BuildPackage,frr-watchfrr))
 $(eval $(call BuildPackage,frr-zebra))
